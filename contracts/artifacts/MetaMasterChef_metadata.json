@@ -1,0 +1,168 @@
+{
+	"compiler": {
+		"version": "0.8.7+commit.e28d00a7"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [],
+				"name": "DDT",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "DDTPerBlock",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "pid",
+						"type": "uint256"
+					}
+				],
+				"name": "poolBalance",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "pid",
+						"type": "uint256"
+					}
+				],
+				"name": "poolInfo",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "contract IERC20",
+								"name": "lpToken",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "allocPoint",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "lastRewardBlock",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "accDRGPerShare",
+								"type": "uint256"
+							},
+							{
+								"internalType": "contract IMasterChef",
+								"name": "poolMasterChef",
+								"type": "address"
+							},
+							{
+								"internalType": "contract IERC20",
+								"name": "rewardToken",
+								"type": "address"
+							}
+						],
+						"internalType": "struct PoolInfo",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "poolLength",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "totalAllocPoint",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/Utils.sol": "MetaMasterChef"
+		},
+		"evmVersion": "london",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/Utils.sol": {
+			"keccak256": "0x77f50f86415f48b8b3939f7c7d3f40efcc36ec1535a63a7911f36492074addcd",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://89b880bc981691225e57cd05130ef7df7810fda35cdf373a36b67a136c5074e4",
+				"dweb:/ipfs/QmZNmbKdg4udv3YD4r3vB2gqdp7z3cCdbrwTUakyJq13Eb"
+			]
+		}
+	},
+	"version": 1
+}

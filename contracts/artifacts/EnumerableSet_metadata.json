@@ -1,0 +1,45 @@
+{
+	"compiler": {
+		"version": "0.6.12+commit.27d51765"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/MasterChef.sol": "EnumerableSet"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/MasterChef.sol": {
+			"keccak256": "0x3fb3546bf3d08ff02ec18b6c2001fc61fd15e706e075427ebe262001b382d15d",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://8ba1235dee95d14bc1700a2577ae0716176ca928218f9468cee4f1f325203d00",
+				"dweb:/ipfs/QmW1Wb8Sddr9FNGUwhcU9kCGCKipTkyW8dzE54VkmyhYpA"
+			]
+		}
+	},
+	"version": 1
+}

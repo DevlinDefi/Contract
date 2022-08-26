@@ -1,0 +1,96 @@
+{
+	"compiler": {
+		"version": "0.8.7+commit.e28d00a7"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [],
+				"name": "BUSD",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "contract LP",
+						"name": "lpAddress",
+						"type": "address"
+					},
+					{
+						"internalType": "contract Router",
+						"name": "routerAddress",
+						"type": "address"
+					}
+				],
+				"name": "CalcLpPrice",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "WBNB",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/Utils.sol": "LpUtils"
+		},
+		"evmVersion": "london",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/Utils.sol": {
+			"keccak256": "0xde4aa73352a7ce4f48d1e77d8e96c9cb62399bdb716030304fafa0f9fc956eb9",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://0044e6d84f273d3f85ecf685a703ffde0b8db35a498c48762ecdcd009e4608ca",
+				"dweb:/ipfs/QmZa6pKzYvUWZ3GEWgBVqdp3q8UxPoEoPycNrifKq2QLTh"
+			]
+		}
+	},
+	"version": 1
+}
