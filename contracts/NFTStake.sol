@@ -596,10 +596,6 @@ abstract contract Ownable is Context {
     }
 }
 
-interface IMigratorChef {
-    function migrate(IERC20 token) external returns (IERC20);
-}
-
 interface IERC165 {
     /**
      * @dev Returns true if this contract implements the interface defined by
@@ -765,7 +761,56 @@ interface IERC721Receiver {
 }
 
 interface INFTMasterChef {
-    function enterStakingCompund(uint256 _amount, address _account) external;
+    function enterStakingCompund(uint256 _amount, address _account) external returns (bool);
+}
+
+abstract contract ReentrancyGuard {
+    // Booleans are more expensive than uint256 or any type that takes up a full
+    // word because each write operation emits an extra SLOAD to first read the
+    // slot's contents, replace the bits taken up by the boolean, and then write
+    // back. This is the compiler's defense against contract upgrades and
+    // pointer aliasing, and it cannot be disabled.
+
+    // The values being non-zero value makes deployment a bit more expensive,
+    // but in exchange the refund on every call to nonReentrant will be lower in
+    // amount. Since refunds are capped to a percentage of the total
+    // transaction's gas, it is best to keep them low in cases like this one, to
+    // increase the likelihood of the full refund coming into effect.
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+
+    uint256 private _status;
+
+    constructor() {
+        _status = _NOT_ENTERED;
+    }
+
+    /**
+     * @dev Prevents a contract from calling itself, directly or indirectly.
+     * Calling a `nonReentrant` function from another `nonReentrant`
+     * function is not supported. It is possible to prevent this from happening
+     * by making the `nonReentrant` function external, and making it call a
+     * `private` function that does the actual work.
+     */
+    modifier nonReentrant() {
+        _nonReentrantBefore();
+        _;
+        _nonReentrantAfter();
+    }
+
+    function _nonReentrantBefore() private {
+        // On the first call to nonReentrant, _notEntered will be true
+        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
+
+        // Any calls to nonReentrant after this point will fail
+        _status = _ENTERED;
+    }
+
+    function _nonReentrantAfter() private {
+        // By storing the original value once again, a refund is triggered (see
+        // https://eips.ethereum.org/EIPS/eip-2200)
+        _status = _NOT_ENTERED;
+    }
 }
 
 // MasterChef is the master of DDT. He can make DDT and he is a fair guy.
@@ -775,12 +820,12 @@ interface INFTMasterChef {
 // distributed and the community can show to govern itself.
 //
 // Have fun reading it. Hopefully it's bug-free. God bless.
-contract NFTStake is Ownable, IERC721Receiver {
+contract NFTStake is Ownable, IERC721Receiver, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     // Info of each user.
     struct UserInfo {
-        uint256[] tokenIds;
+        uint256[] tokenIds; //User NFTs tokenid
         uint256 amount; // How many LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
         //
@@ -797,14 +842,13 @@ contract NFTStake is Ownable, IERC721Receiver {
     }
     // Info of each pool.
     struct PoolInfo {
-        IERC721 NFTToken; // Address of LP token contract.
+        IERC721 NFTToken; // Address of NFT token contract.
         uint256 allocPoint; // How many allocation points assigned to this pool. DDTs to distribute per block.
         uint256 lastRewardBlock; // Last block number that DDTs distribution occurs.
         uint256 accDDTPerShare; // Accumulated DDTs per share, times 1e12. See below.
     }
-
+    //NFTChef address for compund
     INFTMasterChef public NFTMasterChef;
-
     // The DDT TOKEN!
     IERC20 public DDT;
     // Dev address.
@@ -813,8 +857,6 @@ contract NFTStake is Ownable, IERC721Receiver {
     uint256 public DDTPerBlock;
     // Bonus muliplier for early DDT makers.
     uint256 public BONUS_MULTIPLIER = 1;
-    // The migrator contract. It has a lot of DDT. Can only be set through governance (owner).
-    IMigratorChef public migrator;
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
@@ -849,21 +891,18 @@ contract NFTStake is Ownable, IERC721Receiver {
     /**
      * Always returns `IERC721Receiver.onERC721Received.selector`.
      */
-    function onERC721Received(address, address, uint256, bytes memory) public virtual override returns (bytes4) {
+    function onERC721Received(address, address, uint256, bytes memory) external  virtual override returns (bytes4) {
         return this.onERC721Received.selector;
     }
-
-    function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
+    function updateMultiplier(uint256 multiplierNumber) external onlyOwner {
         BONUS_MULTIPLIER = multiplierNumber;
     }
-
     function poolLength() external view returns (uint256) {
         return poolInfo.length;
     }
-
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add( uint256 _allocPoint, IERC721 _NFTToken, bool _withUpdate ) public onlyOwner {
+    function add( uint256 _allocPoint, IERC721 _NFTToken, bool _withUpdate ) external  onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -878,31 +917,23 @@ contract NFTStake is Ownable, IERC721Receiver {
             })
         );
     }
-
     // Update the given pool's DDT allocation point. Can only be called by the owner.
-    function set( uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
+    function set( uint256 _pid, uint256 _allocPoint, bool _withUpdate) external  onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
         poolInfo[_pid].allocPoint = _allocPoint;
     }
-
-    // Set the migrator contract. Can only be called by the owner.
-    function setMigrator(IMigratorChef _migrator) public onlyOwner {
-        migrator = _migrator;
-    }
-
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
          return _to.sub(_from).mul(BONUS_MULTIPLIER);
     }
-
+    // Return array of user NFTs
     function getUserTokenIds(uint256 _pid, address _user) public view returns (uint256[] memory) {
         UserInfo storage user = userInfo[_pid][_user];
         return user.tokenIds;
     }
-
     // View function to see pending DDTs on frontend.
     function pendingDDT(uint256 _pid, address _user) external view returns (uint256){
         PoolInfo storage pool = poolInfo[_pid];
@@ -911,12 +942,11 @@ contract NFTStake is Ownable, IERC721Receiver {
         uint256 NFTSupply = pool.NFTToken.balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && NFTSupply != 0) {
             uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 DDTReward = multiplier.mul(DDTPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-            accDDTPerShare = accDDTPerShare.add(DDTReward.mul(1e12).div(NFTSupply));
+            uint256 DDTReward = multiplier.mul(DDTPerBlock).mul(pool.allocPoint).div(totalAllocPoint); // use safe math division by zero
+            accDDTPerShare = accDDTPerShare.add(DDTReward.mul(1e12).div(NFTSupply)); // use safe math division by zero
         }
         return user.amount.mul(accDDTPerShare).div(1e12).sub(user.rewardDebt);
     }
-
     // Update reward vairables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
         uint256 length = poolInfo.length;
@@ -924,7 +954,6 @@ contract NFTStake is Ownable, IERC721Receiver {
             updatePool(pid);
         }
     }
-
     // Update reward variables of the given pool to be up-to-date.
     function updatePool(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
@@ -937,15 +966,15 @@ contract NFTStake is Ownable, IERC721Receiver {
             return;
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-        uint256 DDTReward = multiplier.mul(DDTPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-        DDT.mint(address(this), DDTReward);
-        pool.accDDTPerShare = pool.accDDTPerShare.add(DDTReward.mul(1e12).div(NFTSupply));
+        uint256 DDTReward = multiplier.mul(DDTPerBlock).mul(pool.allocPoint).div(totalAllocPoint); // use safe math division by zero
+        bool succes = DDT.mint(address(this), DDTReward);
+        require(succes, "Cant mint DDT"); // check if can mint DDT
+        pool.accDDTPerShare = pool.accDDTPerShare.add(DDTReward.mul(1e12).div(NFTSupply)); // use safe math division by zero
         pool.lastRewardBlock = block.number;
     }
-
     // Deposit NFT tokens to MasterChef for DDT allocation.
-    function deposit(uint256 _pid, uint256 _tokenId) public {
-        require(_tokenId != 0, "Token id is not good");
+    function deposit(uint256 _pid, uint256 _tokenId) external nonReentrant {
+        require(_tokenId != 0, "Token id is not good"); // check if nft id is not zero
 
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
@@ -953,32 +982,31 @@ contract NFTStake is Ownable, IERC721Receiver {
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accDDTPerShare).div(1e12).sub(user.rewardDebt);
             if(pending > 0){
-                safeDDTTransfer(msg.sender, pending);
+                bool succes = safeDDTTransfer(msg.sender, pending);
+                require(succes, "Transfer failed"); // check if transfer succes
             }
         }
-        pool.NFTToken.safeTransferFrom(address(msg.sender), address(this), _tokenId);
+        pool.NFTToken.safeTransferFrom(address(msg.sender), address(this), _tokenId); // use safetransfer openzapplin
         user.amount = user.amount.add(1);
         user.rewardDebt = user.amount.mul(pool.accDDTPerShare).div(1e12);
         user.tokenIds.push(_tokenId);
         emit Deposit(msg.sender, _pid, _tokenId);
     }
-
     // Withdraw NFT tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _tokenId) public {
+    function withdraw(uint256 _pid, uint256 _tokenId) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-
         require(user.amount > 0, "withdraw: not good");
-
-        uint256 pending;
+        updatePool(_pid);
+        uint256   pending = user.amount.mul(pool.accDDTPerShare).div(1e12).sub(user.rewardDebt);
+        if(pending > 0){
+            bool succes = safeDDTTransfer(msg.sender, pending);
+            require(succes, "Transfer failed"); // check if transfer succes
+        }
         if(_tokenId == 0){
-            updatePool(_pid);
-            pending = user.amount.mul(pool.accDDTPerShare).div(1e12).sub(user.rewardDebt);
-            if(pending > 0){
-                safeDDTTransfer(msg.sender, pending);
-            }
             user.rewardDebt = user.amount.mul(pool.accDDTPerShare).div(1e12);
-        }else {
+        }
+        else {
             uint256 hasTokenId = 0;
             uint256 tokenIdIndex;
             for(uint256 i; i<user.tokenIds.length; i++){
@@ -987,47 +1015,48 @@ contract NFTStake is Ownable, IERC721Receiver {
                     tokenIdIndex = i;
                 }
             }
-            require(hasTokenId == 1, 'You are not Owner of token id');
-            
-            updatePool(_pid);
-            pending = user.amount.mul(pool.accDDTPerShare).div(1e12).sub(user.rewardDebt);
-            if(pending > 0){
-                safeDDTTransfer(msg.sender, pending);
-            }
+            require(hasTokenId == 1, "You are not Owner of token id"); // check if user owner of NFT
             user.amount = user.amount.sub(1);
             user.rewardDebt = user.amount.mul(pool.accDDTPerShare).div(1e12);
             delete user.tokenIds[tokenIdIndex];
-            pool.NFTToken.safeTransferFrom(address(this), address(msg.sender), _tokenId);
+            pool.NFTToken.safeTransferFrom(address(this), address(msg.sender), _tokenId); // use safetransfer openzapplin
         }
         emit Withdraw(msg.sender, _pid, _tokenId);
     }
-
-    function compundDDT(uint256 _pid) public {
+    // Enterstaking user DDT reward to NFTChecf
+    function compundDDT(uint256 _pid) external nonReentrant{
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accDDTPerShare).div(1e12).sub(user.rewardDebt);
-        require(pending > 0, "Amount is zero");
-        DDT.approve(address(NFTMasterChef), pending);
-        NFTMasterChef.enterStakingCompund(pending, msg.sender);
+        require(pending > 0, "Amount is zero"); // check if user DDT reward is not zero
         user.rewardDebt = user.amount.mul(pool.accDDTPerShare).div(1e12);
+        bool succes = DDT.approve(address(NFTMasterChef), pending);
+        require(succes, "Approve failed");// check if approve NFTChef failed
+        //for security use nonReentrant openzapplin
+        succes = NFTMasterChef.enterStakingCompund(pending, msg.sender);
+        require(succes, "Enterstaking failed"); // result of calling externall contrcat
         emit Withdraw(msg.sender, _pid, pending);
     }
-
     // Safe DDT transfer function, just in case if rounding error causes pool to not have enough DDTs.
-    function safeDDTTransfer(address _to, uint256 _amount) internal {
-        uint256 DDTbal = DDT.balanceOf(address(this));
-        if (_amount > DDTbal) {
-            DDT.transfer(_to, DDTbal);
+    function safeDDTTransfer(address _to, uint256 _amount) internal returns(bool){
+        uint256 DDTBal = DDT.balanceOf(address(this));
+        bool sent = false;
+        if (_amount > DDTBal) {
+            sent = DDT.transfer(_to, DDTBal);
+            require(sent,"Transfer Failed");
+            return sent;
         } else {
-            DDT.transfer(_to, _amount);
+            sent = DDT.transfer(_to, _amount);
+            require(sent,"Transfer Failed");
+            return sent;
         }
     }
-
+    // update dev address
     function setDevAddress(address _devaddr) public onlyOwner {
         devaddr = _devaddr;
     }
-
+    // update DDT emission rate
     function updateDDTPerBlock(uint256 newAmount) public onlyOwner {
         DDTPerBlock = newAmount;
     }
