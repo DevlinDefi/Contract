@@ -592,12 +592,57 @@ abstract contract Ownable is Context {
     }
 }
 
-interface IMigratorChef {
-    function migrate(IERC20 token) external returns (IERC20);
+interface IERC721 {
+    function createNFT(address to) external returns(uint256);
 }
 
-interface IERC721 {
-    function createNFT(address to) external;
+abstract contract ReentrancyGuard {
+    // Booleans are more expensive than uint256 or any type that takes up a full
+    // word because each write operation emits an extra SLOAD to first read the
+    // slot's contents, replace the bits taken up by the boolean, and then write
+    // back. This is the compiler's defense against contract upgrades and
+    // pointer aliasing, and it cannot be disabled.
+
+    // The values being non-zero value makes deployment a bit more expensive,
+    // but in exchange the refund on every call to nonReentrant will be lower in
+    // amount. Since refunds are capped to a percentage of the total
+    // transaction's gas, it is best to keep them low in cases like this one, to
+    // increase the likelihood of the full refund coming into effect.
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+
+    uint256 private _status;
+
+    constructor() {
+        _status = _NOT_ENTERED;
+    }
+
+    /**
+     * @dev Prevents a contract from calling itself, directly or indirectly.
+     * Calling a `nonReentrant` function from another `nonReentrant`
+     * function is not supported. It is possible to prevent this from happening
+     * by making the `nonReentrant` function external, and making it call a
+     * `private` function that does the actual work.
+     */
+    modifier nonReentrant() {
+        _nonReentrantBefore();
+        _;
+        _nonReentrantAfter();
+    }
+
+    function _nonReentrantBefore() private {
+        // On the first call to nonReentrant, _notEntered will be true
+        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
+
+        // Any calls to nonReentrant after this point will fail
+        _status = _ENTERED;
+    }
+
+    function _nonReentrantAfter() private {
+        // By storing the original value once again, a refund is triggered (see
+        // https://eips.ethereum.org/EIPS/eip-2200)
+        _status = _NOT_ENTERED;
+    }
 }
 
 // MasterChef is the master of Power. He can make Power and he is a fair guy.
@@ -607,7 +652,7 @@ interface IERC721 {
 // distributed and the community can show to govern itself.
 //
 // Have fun reading it. Hopefully it's bug-free. God bless.
-contract NFTMasterChef is Ownable {
+contract NFTMasterChef is Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     // Info of each user.
@@ -633,22 +678,19 @@ contract NFTMasterChef is Ownable {
         uint256 lastRewardBlock; // Last block number that Powers distribution occurs.
         uint256 accPowerPerShare; // Accumulated Powers per share, times 1e12. See below.
     }
-
+    //Info of each NFT that can mint
     struct NFTsInfo {
-        IERC721 NFT;
-        uint256 power;
+        IERC721 NFT; // Address of NFT Token
+        uint256 power; // Power of NFT
     }
-
+    // Array of NFT can mint
     NFTsInfo[] public nftsInfo;
-
     // The Power TOKEN!
     IERC20 public DDT;
     // Power tokens created per block.
     uint256 public PowerPerBlock;
     // Bonus muliplier for early Power makers.
     uint256 public BONUS_MULTIPLIER = 1;
-    // The migrator contract. It has a lot of power. Can only be set through governance (owner).
-    IMigratorChef public migrator;
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
@@ -657,12 +699,12 @@ contract NFTMasterChef is Ownable {
     uint256 public totalAllocPoint = 0;
     // The block number when Power mining starts.
     uint256 public startBlock;
-
-    address public NFTStakeAddress;
-    address public DDTMasterchefAddress;
-
-    mapping(address => uint256) public powerBalance;
-
+    // Address of NFTStake can compund
+    address public NFTStakeAddress; 
+    // Address of DDTFarm can compund
+    address public DDTMasterchefAddress; 
+    // Because power is not token store powerBalance here
+    mapping(address => uint256) public powerBalance; 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyWithdraw(
@@ -679,7 +721,6 @@ contract NFTMasterChef is Ownable {
         DDT = _DDT;
         PowerPerBlock = _PowerPerBlock;
         startBlock = _startBlock;
-        
         // staking pool
         poolInfo.push(PoolInfo({
             lpToken: DDT,
@@ -687,24 +728,22 @@ contract NFTMasterChef is Ownable {
             lastRewardBlock: startBlock,
             accPowerPerShare: 0
         }));
-
         totalAllocPoint = 1000;
-
     }
-
-    function updateNFTStakeAddress(address _NFTStakeAddress) public onlyOwner{
+    // Updtae NFTStake address can copmund
+    function updateNFTStakeAddress(address _NFTStakeAddress) external onlyOwner{
         NFTStakeAddress = _NFTStakeAddress;
     }
-
-    function updateDDTMasterchefAddress(address _DDTMasterchefAddress) public onlyOwner{
+    // Updtae DDTFaem address can copmund
+    function updateDDTMasterchefAddress(address _DDTMasterchefAddress) external onlyOwner{
         DDTMasterchefAddress = _DDTMasterchefAddress;
     }
-
-    function getPowerBalance(address account) public view returns(uint256) {
+    // return user power balance from powerBalance
+    function getPowerBalance(address account) external view returns(uint256) {
         return powerBalance[account];
     }
-
-    function addNFT(IERC721 _NFT, uint256 _power) public onlyOwner {
+    // add new NFT user can mint
+    function addNFT(IERC721 _NFT, uint256 _power) external onlyOwner {
         nftsInfo.push(
             NFTsInfo({
                 NFT: _NFT,
@@ -712,48 +751,36 @@ contract NFTMasterChef is Ownable {
             })
         );
     }
-
-    function updateNFT(uint256 level, uint256 _power) public onlyOwner {
+    // Update NFT power value
+    function updateNFT(uint256 level, uint256 _power) external onlyOwner {
         nftsInfo[level].power = _power;
     }
-
-    function claimNFTReward(uint256 level, uint256 _pid) public {
+    //user by power balance and pending power can mint NFT 
+    function claimNFTReward(uint256 level, uint256 _pid) external {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        uint256 accPowerPerShare = pool.accPowerPerShare;
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
-        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 PowerReward = multiplier.mul(PowerPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-            accPowerPerShare = accPowerPerShare.add(PowerReward.mul(1e12).div(lpSupply));
-        }
-        uint256 pending = user.amount.mul(accPowerPerShare).div(1e12).sub(user.rewardDebt);
         NFTsInfo storage nft = nftsInfo[level];
-        uint256 total = pending.add(powerBalance[msg.sender]);
-        if(total > nft.power){
-            if(_pid == 0){
-                leaveStaking(0);
-            }
-            if(_pid != 0){
-                withdraw(_pid,0);
-            }
-        }
-        require(nft.power < powerBalance[msg.sender], 'Power is not enough');
-        powerBalance[msg.sender] = powerBalance[msg.sender].sub(nft.power);
-        nft.NFT.createNFT(msg.sender);
-    }
 
-    function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
+        updatePool(_pid);
+        uint256 pending = user.amount.mul(pool.accPowerPerShare).div(1e12).sub(user.rewardDebt);
+        if(pending > 0){
+            powerBalance[msg.sender] = powerBalance[msg.sender].add(pending); // store power reward on powerBalance
+        }
+        user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
+        require(nft.power <= powerBalance[msg.sender], "Power is not enough"); // NFT level user selected power is > USer power
+        powerBalance[msg.sender] = powerBalance[msg.sender].sub(nft.power);
+        uint256 tokenId = nft.NFT.createNFT(msg.sender);
+        require(tokenId != 0, "Token id is invalid");// check if NFTFarm can mint NFT and send to user
+    }
+    function updateMultiplier(uint256 multiplierNumber) external onlyOwner {
         BONUS_MULTIPLIER = multiplierNumber;
     }
-
     function poolLength() external view returns (uint256) {
         return poolInfo.length;
     }
-
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function add( uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate ) public onlyOwner {
+    function add( uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate ) external onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -768,38 +795,18 @@ contract NFTMasterChef is Ownable {
             })
         );
     }
-
     // Update the given pool's Power allocation point. Can only be called by the owner.
-    function set( uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
+    function set( uint256 _pid, uint256 _allocPoint, bool _withUpdate) external onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
         poolInfo[_pid].allocPoint = _allocPoint;
     }
-
-    // Set the migrator contract. Can only be called by the owner.
-    function setMigrator(IMigratorChef _migrator) public onlyOwner {
-        migrator = _migrator;
-    }
-
-    // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
-    function migrate(uint256 _pid) public {
-        require(address(migrator) != address(0), 'migrate: no migrator');
-        PoolInfo storage pool = poolInfo[_pid];
-        IERC20 lpToken = pool.lpToken;
-        uint256 bal = lpToken.balanceOf(address(this));
-        lpToken.safeApprove(address(migrator), bal);
-        IERC20 newLpToken = migrator.migrate(lpToken);
-        require(bal == newLpToken.balanceOf(address(this)), 'migrate: bad');
-        pool.lpToken = newLpToken;
-    }
-
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
          return _to.sub(_from).mul(BONUS_MULTIPLIER);
     }
-
     // View function to see pending Powers on frontend.
     function pendingPower(uint256 _pid, address _user) external view returns (uint256){
         PoolInfo storage pool = poolInfo[_pid];
@@ -808,12 +815,11 @@ contract NFTMasterChef is Ownable {
         uint256 lpSupply = pool.lpToken.balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 PowerReward = multiplier.mul(PowerPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-            accPowerPerShare = accPowerPerShare.add(PowerReward.mul(1e12).div(lpSupply));
+            uint256 PowerReward = multiplier.mul(PowerPerBlock).mul(pool.allocPoint).div(totalAllocPoint); // use safe math division by zero
+            accPowerPerShare = accPowerPerShare.add(PowerReward.mul(1e12).div(lpSupply)); // use safe math division by zero
         }
         return user.amount.mul(accPowerPerShare).div(1e12).sub(user.rewardDebt);
     }
-
     // Update reward vairables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
         uint256 length = poolInfo.length;
@@ -821,8 +827,7 @@ contract NFTMasterChef is Ownable {
             updatePool(pid);
         }
     }
-
-    // Update reward variables of the given pool to be up-to-date.
+    // Update reward variables of the given pool to be up-to-date. power is not token then we have no mint
     function updatePool(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
         if (block.number <= pool.lastRewardBlock) {
@@ -834,13 +839,12 @@ contract NFTMasterChef is Ownable {
             return;
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-        uint256 PowerReward = multiplier.mul(PowerPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
-        pool.accPowerPerShare = pool.accPowerPerShare.add(PowerReward.mul(1e12).div(lpSupply));
+        uint256 PowerReward = multiplier.mul(PowerPerBlock).mul(pool.allocPoint).div(totalAllocPoint); // use safe math division by zero
+        pool.accPowerPerShare = pool.accPowerPerShare.add(PowerReward.mul(1e12).div(lpSupply)); // use safe math division by zero
         pool.lastRewardBlock = block.number;
     }
-
     // Deposit LP tokens to MasterChef for Power allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
+    function deposit(uint256 _pid, uint256 _amount) external nonReentrant{
         require (_pid != 0, "deposit Power by staking");
         require(_amount > 0, "Amount is zero");
 
@@ -850,17 +854,16 @@ contract NFTMasterChef is Ownable {
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accPowerPerShare).div(1e12).sub(user.rewardDebt);
             if(pending > 0){
-                powerBalance[msg.sender] = powerBalance[msg.sender].add(pending);
+                powerBalance[msg.sender] = powerBalance[msg.sender].add(pending); // store power reward on powerBalance
             }
         }
-        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount); // use safetransfer openzapplin
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
         emit Deposit(msg.sender, _pid, _amount);
     }
-
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount) public {
+    function withdraw(uint256 _pid, uint256 _amount) external nonReentrant {
 
         require (_pid != 0, "withdraw Power by unstaking");
 
@@ -870,16 +873,17 @@ contract NFTMasterChef is Ownable {
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accPowerPerShare).div(1e12).sub(user.rewardDebt);
         if(pending > 0){
-            powerBalance[msg.sender] = powerBalance[msg.sender].add(pending);
+            powerBalance[msg.sender] = powerBalance[msg.sender].add(pending); // store power reward on powerBalance
         }
-        user.amount = user.amount.sub(_amount);
+        if(_amount > 0){
+            user.amount = user.amount.sub(_amount);
+            pool.lpToken.safeTransfer(address(msg.sender), _amount); // use safetransfer openzapplin
+        }
         user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
-        pool.lpToken.safeTransfer(address(msg.sender), _amount);
         emit Withdraw(msg.sender, _pid, _amount);
     }
-
-        // Stake Power tokens to MasterChef
-    function enterStaking(uint256 _amount) public {
+    // Stake Power tokens to MasterChef
+    function enterStaking(uint256 _amount) external nonReentrant {
         require(_amount > 0, "Amount is zero");
 
         PoolInfo storage pool = poolInfo[0];
@@ -889,20 +893,20 @@ contract NFTMasterChef is Ownable {
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accPowerPerShare).div(1e12).sub(user.rewardDebt);
             if(pending > 0) {
-                powerBalance[address(msg.sender)] = powerBalance[address(msg.sender)].add(pending);
+                powerBalance[address(msg.sender)] = powerBalance[address(msg.sender)].add(pending); // store power reward on powerBalance
             }
         }
-        if(_amount > 0) {
-            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
-            user.amount = user.amount.add(_amount);
-        }
+
+        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount); // use safetransfer openzapplin
+
+        user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
         emit Deposit(msg.sender, 0, _amount);
     }
-
-    function enterStakingCompund(uint256 _amount, address _account) public {
+    // Just use for another chef enterstaking on NFTMasterchef
+    function enterStakingCompund(uint256 _amount, address _account) external nonReentrant returns(bool){
         require(_amount > 0, "Amount is zero");
-        require(msg.sender == NFTStakeAddress || msg.sender == DDTMasterchefAddress, "Caller is not family");
+        require(msg.sender == NFTStakeAddress || msg.sender == DDTMasterchefAddress, "Caller is not family"); // check if caller NFTStake and DDTFarm
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[0][address(_account)];
         
@@ -910,19 +914,20 @@ contract NFTMasterChef is Ownable {
         if (user.amount > 0) {
             uint256 pending = user.amount.mul(pool.accPowerPerShare).div(1e12).sub(user.rewardDebt);
             if(pending > 0) {
-                powerBalance[address(_account)] = powerBalance[address(_account)].add(pending);
+                powerBalance[address(_account)] = powerBalance[address(_account)].add(pending);// store power reward on powerBalance
             }
         }
-        if(_amount > 0) {
-            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
-            user.amount = user.amount.add(_amount);
-        }
-        user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
-        emit Deposit(_account, 0, _amount);
-    }
 
+        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount); // use safetransfer openzapplin
+
+        user.amount = user.amount.add(_amount);
+        user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
+
+        emit Deposit(_account, 0, _amount);
+        return true;
+    }
     // Withdraw Power tokens from STAKING.
-    function leaveStaking(uint256 _amount) public {
+    function leaveStaking(uint256 _amount) external nonReentrant{
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[0][msg.sender];
 
@@ -934,25 +939,22 @@ contract NFTMasterChef is Ownable {
         }
         if(_amount > 0) {
             user.amount = user.amount.sub(_amount);
-            pool.lpToken.safeTransfer(address(msg.sender), _amount);
+            pool.lpToken.safeTransfer(address(msg.sender), _amount); // use safetransfer openzapplin
         }
         user.rewardDebt = user.amount.mul(pool.accPowerPerShare).div(1e12);
         emit Withdraw(msg.sender, 0, _amount);
     }
-
-    
-
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
+    function emergencyWithdraw(uint256 _pid) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
+        pool.lpToken.safeTransfer(address(msg.sender), user.amount); // use safetransfer openzapplin
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
     }
-    
-    function updatePowerPerBlock(uint256 newAmount) public onlyOwner {
+    //Update Emission power per block
+    function updatePowerPerBlock(uint256 newAmount) external onlyOwner {
         PowerPerBlock = newAmount;
     }
 }
